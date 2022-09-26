@@ -1,10 +1,13 @@
 #include <stdio.h>
 
 typedef int Elem;
+#define LOGS_TO_FILE
 #include "Stack\Stack.h"
 
 int main()
 {
+    printf("KENAR = %lld", KENAR);
+    system("pause");
     FILE* fp = fopen(LOGS, "w");
     fclose(fp);
 
@@ -21,11 +24,14 @@ int main()
     printf("End pop\n");
 
     for(int i = 0; i < 1000; i++)
+    {
         StackPush(&stk1, i*i);
+        printf("%d Push\n", i);
+    }
 
     for(int i = 0; i < 1010; i++)
         printf("%d\n", StackPop(&stk1));
 
     StackDtor(&stk1);
-    DUMP(&stk1);
+    DUMP_STACK(&stk1);
 }
