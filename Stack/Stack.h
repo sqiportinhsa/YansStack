@@ -20,9 +20,9 @@ enum ErrorCodes
     NULL_DATA               = 32,
     ERROR_LOGS_OPEN         = 64,
     LEFT_BORDER_DAMAGED     = 128,
-    RIGHT_BORDER_DAMAGED   = 256,
-    LEFT_BORDER_VIOLATED    = 128,
-    RIGHT_BORDER_VIOLATED   = 256,
+    RIGHT_BORDER_DAMAGED    = 256,
+    STRUCT_HASH_MISMATCH    = 512,
+    DATA_HASH_MISMATCH      = 1024,
 };
 
 const char ERROR_DESCRIPTION[][150] = {{"Pointer to stack = nullptr\n"},
@@ -82,13 +82,27 @@ typedef struct Stack
 
     LogInfo debug = {};
 
-    Elem *data    = (Elem*)POISON_PTR;
+    Elem *data     = (Elem*)POISON_PTR;
     int   size     = POISON;
     int   capacity = POISON - 1;
+
+    size_t struct_hash = 0;
+    size_t data_hash   = 0;
 
     size_t right_border = KENAR ^ 1;
 } Stack;
 
+size_t GetHash(void* struct_ptr, size_t size)
+{
+    if (struct_ptr == nullptr || size < 0 || size == POISON)
+        return POISON;
+
+    char* ptr = (char*)struct_ptr;
+    size_t hash = 0;
+    for(int i = 0; i < size; i++)
+        hash += (size_t)ptr[i];
+    return hash;
+}
 
 //!------------------------------
 //!deep = 1 - dump without printing stack elements
@@ -174,12 +188,22 @@ size_t StackCheck(Stack* stk)
             error |= NULL_DATA;
         else
         {
+            if (GetHash(stk->data, stk->capacity*sizeof(Elem)) != stk->data_hash)
+                error |= DATA_HASH_MISMATCH;
+
             if (((size_t*)stk->data)[-1] != KENAR)
                 error |= LEFT_BORDER_DAMAGED;
             if (stk->capacity >= 0 && stk->capacity != POISON - 1 && 
                 *(size_t*)((char*)stk->data + stk->capacity*sizeof(Elem)) != KENAR ^ 1)
                 error |= RIGHT_BORDER_DAMAGED;
         }
+        
+        int old_hash = stk->struct_hash;
+        stk->struct_hash = 0;
+        int now_hash = GetHash(stk, sizeof(Stack));
+        stk->struct_hash = old_hash;
+        if (stk->struct_hash != now_hash)
+            error |= STRUCT_HASH_MISMATCH;
     }
     
     FILE* fp = fopen(LOGS, "a");
@@ -222,6 +246,8 @@ size_t StackConstructor(Stack* stk, int capacity, int line, const char function[
         *(size_t*)mem_block = KENAR;
         *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
         stk->data = (Elem*)(mem_block + sizeof(KENAR));
+        
+        stk->data_hash = GetHash(stk->data, stk->capacity*sizeof(Elem));
     }
     stk->size = 0;
 
@@ -230,7 +256,9 @@ size_t StackConstructor(Stack* stk, int capacity, int line, const char function[
     strcpy_(stk->debug.function, function);
     strcpy_(stk->debug.name, name);
     stk->debug.line   = line;
-    stk->debug.status = true;  
+    stk->debug.status = true;
+
+    stk->struct_hash = GetHash(stk, sizeof(stk));
 
     OK_ASSERT(stk);
     return error;
@@ -241,10 +269,13 @@ size_t StackConstructor(Stack* stk, int capacity, int line, const char function[
 size_t StackDtor(Stack* stk)
 {
     OK_ASSERT(stk);
-    stk->capacity = POISON - 1;
-    stk->size     = POISON;
+    stk->capacity    = POISON - 1;
+    stk->size        = POISON;
     free((char*)stk->data - sizeof(KENAR));
-    stk->data     = (Elem*)POISON_PTR;
+    stk->data        = (Elem*)POISON_PTR;
+
+    stk->data_hash   = 0;
+    stk->struct_hash = 0;
 
     stk->debug.status = 0;
 
@@ -261,13 +292,14 @@ size_t StackResizeUp(Stack* stk)
         size_t new_capacity = stk->capacity*sizeof(Elem) + sizeof(KENAR)*2;
 
         char* mem_block = (char*)calloc(new_capacity, 1);
+        if (mem_block == nullptr)
+            return MEMORY_ALLOCATION_ERROR;
+
         *(size_t*)mem_block = KENAR;
         *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
         stk->data = (Elem*)(mem_block + sizeof(KENAR));
 
         OK_ASSERT(stk);
-        if (stk->data == nullptr)
-            return MEMORY_ALLOCATION_ERROR;
         return NO_ERROR;
     }
 
@@ -301,9 +333,14 @@ size_t StackPush(Stack* stk, Elem value)
     }
     stk->data[stk->size++] = value;
 
+    stk->data_hash = GetHash(stk->data, sizeof(Elem)*stk->capacity);
+
     FILE* fp = fopen(LOGS, "a");
     fprintf(fp, "stk.data[%d] = %d\n", stk->size - 1, stk->data[stk->size - 1]);
     fclose(fp);
+
+    stk->struct_hash = 0;
+    stk->struct_hash = GetHash(stk, sizeof(Stack));
 
     OK_ASSERT(stk);
     return NO_ERROR;
@@ -363,6 +400,9 @@ Elem StackPop(Stack* stk, size_t *err = nullptr)
         if (now_error != NO_ERROR)
             return POISON;
 
+        stk->data_hash = GetHash(stk->data, stk->capacity*sizeof(Elem));
+        stk->struct_hash = 0;
+        stk->struct_hash = GetHash(stk, sizeof(Stack));
         return result;
     }
     else
