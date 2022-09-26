@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <string.h>
 
 #include "../Strings/_Strings.h"
 
@@ -18,17 +19,21 @@ enum ErrorCodes
     SIZE_BIGGER_CAPACITY    = 16,
     NULL_DATA               = 32,
     ERROR_LOGS_OPEN         = 64,
+    LEFT_BORDER_DAMAGED     = 128,
+    RIGHT_BORDER_DAMAGED   = 256,
     LEFT_BORDER_VIOLATED    = 128,
     RIGHT_BORDER_VIOLATED   = 256,
 };
 
-const char ERROR_DESCRIPTION[][100] = {{"Pointer to stack = nullptr\n"},
+const char ERROR_DESCRIPTION[][150] = {{"Pointer to stack = nullptr\n"},
                                        {"Error during memmory allocation\n"},
                                        {"Negative or poison size\n"},
                                        {"Negative or poison capacity\n"},
                                        {"Size is bigger then capacity\n"},
                                        {"Pointer to stack.data = nullptr\n"},
-                                       {"Error during open logs file\n"}};
+                                       {"Error during open logs file\n"},
+                                       {"The left boundary element is damaged. Other data in the structure may have been changed\n"},
+                                       {"The right boundary element is damaged. Other data in the structure may have been changed\n"}};
 
 const char   LOGS[]     = "StackLogs.txt";
 const int    DUMP_LEVEL = 2;
@@ -114,7 +119,9 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
     LogPrintf(fp, "\t{\n");
 
     if (deep > 1 && stk->data != nullptr && stk->size != POISON && stk->capacity != POISON && stk->size <= stk->capacity && stk->capacity >= 0 && stk->size >= 0)
-    {
+        {
+        LogPrintf(fp, "\t\tLeftCan  = %llu\n", ((size_t*)stk->data)[-1]);
+        LogPrintf(fp, "\t\tRightCan = %llu\n", *(size_t*)((char*)stk->data + sizeof(Elem)*stk->capacity));
         int i = 0;
         if (deep > 2 || stk->capacity <= 20)
         {
@@ -155,14 +162,25 @@ size_t StackCheck(Stack* stk)
     size_t error = NO_ERROR;
     if (stk == nullptr)
         error |= NULL_STACK_POINTER;
-    if (stk->size < 0 || stk->size == POISON)
-        error |= WRONG_SIZE;
-    if (stk->capacity < 0|| stk->capacity == POISON)
-        error |= WRONG_CAPACITY;
-    if (stk->size > stk->capacity)
-        error |= SIZE_BIGGER_CAPACITY;
-    if (stk->data == nullptr)
-        error |= NULL_DATA;
+    else
+    {
+        if (stk->size < 0 || stk->size == POISON)
+            error |= WRONG_SIZE;
+        if (stk->capacity < 0|| stk->capacity == POISON)
+            error |= WRONG_CAPACITY;
+        if (stk->size > stk->capacity)
+            error |= SIZE_BIGGER_CAPACITY;
+        if (stk->data == nullptr || stk->data == POISON_PTR)
+            error |= NULL_DATA;
+        else
+        {
+            if (((size_t*)stk->data)[-1] != KENAR)
+                error |= LEFT_BORDER_DAMAGED;
+            if (stk->capacity >= 0 && stk->capacity != POISON - 1 && 
+                *(size_t*)((char*)stk->data + stk->capacity*sizeof(Elem)) != KENAR ^ 1)
+                error |= RIGHT_BORDER_DAMAGED;
+        }
+    }
     
     FILE* fp = fopen(LOGS, "a");
     LogPrintf(fp, "\nStack = %p\n" "Chech status = %d\n", stk, error);
@@ -191,9 +209,20 @@ size_t StackConstructor(Stack* stk, int capacity, int line, const char function[
     size_t error = 0;
     *stk = {};
     stk->capacity = capacity;
-    stk->data = (Elem*)calloc(capacity, sizeof(Elem));
-    if (stk->data == nullptr)
+
+    size_t new_capacity = stk->capacity*sizeof(Elem) + sizeof(KENAR)*2;
+    char* mem_block = (char*)calloc(new_capacity, 1);
+    if (mem_block == nullptr)
+    {
+        stk->data = nullptr;
         error |= NULL_DATA | MEMORY_ALLOCATION_ERROR;
+    }
+    else
+    {
+        *(size_t*)mem_block = KENAR;
+        *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+        stk->data = (Elem*)(mem_block + sizeof(KENAR));
+    }
     stk->size = 0;
 
     stk->debug = {};
@@ -214,7 +243,7 @@ size_t StackDtor(Stack* stk)
     OK_ASSERT(stk);
     stk->capacity = POISON - 1;
     stk->size     = POISON;
-    free(stk->data);
+    free((char*)stk->data - sizeof(KENAR));
     stk->data     = (Elem*)POISON_PTR;
 
     stk->debug.status = 0;
@@ -229,7 +258,12 @@ size_t StackResizeUp(Stack* stk)
     if (stk->capacity == 0)
     {
         stk->capacity = 10;
-        stk->data = (Elem*)calloc(stk->capacity, sizeof(Elem));
+        size_t new_capacity = stk->capacity*sizeof(Elem) + sizeof(KENAR)*2;
+
+        char* mem_block = (char*)calloc(new_capacity, 1);
+        *(size_t*)mem_block = KENAR;
+        *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+        stk->data = (Elem*)(mem_block + sizeof(KENAR));
 
         OK_ASSERT(stk);
         if (stk->data == nullptr)
@@ -238,7 +272,13 @@ size_t StackResizeUp(Stack* stk)
     }
 
     stk->capacity = stk->capacity * FOR_RESIZE;
-    stk->data = (Elem*)realloc(stk->data, stk->capacity * sizeof(Elem));
+    size_t new_capacity = stk->capacity*sizeof(Elem) + sizeof(KENAR)*2;
+
+    char* mem_block = (char*)realloc((char*)stk->data - sizeof(KENAR), new_capacity);
+    *(size_t*)mem_block = KENAR;
+    *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+    stk->data = (Elem*)(mem_block + sizeof(KENAR));
+    
     if (stk->data == nullptr)
         return MEMORY_ALLOCATION_ERROR;
     
@@ -280,9 +320,18 @@ size_t StackResizeDown(Stack* stk)
     {
         stk->capacity = stk->capacity / FOR_RESIZE;
 
-        stk->data = (Elem*)realloc(stk->data, stk->capacity * sizeof(Elem));
-        if (stk->data == nullptr)
+        size_t new_capacity = stk->capacity*sizeof(Elem) + sizeof(KENAR)*2;
+        char* mem_block = (char*)realloc((char*)stk->data - sizeof(KENAR), new_capacity);
+        
+        if (mem_block == nullptr)
+        {
+            stk->data = nullptr;
             return MEMORY_ALLOCATION_ERROR;
+        }
+
+        *(size_t*)mem_block = KENAR;
+        *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+        stk->data = (Elem*)(mem_block + sizeof(KENAR));
     }
     
     OK_ASSERT(stk);
