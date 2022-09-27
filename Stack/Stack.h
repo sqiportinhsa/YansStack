@@ -35,11 +35,15 @@ const char ERROR_DESCRIPTION[][150] = {{"Pointer to stack = nullptr\n"},
                                        {"The left boundary element is damaged. Other data in the structure may have been changed\n"},
                                        {"The right boundary element is damaged. Other data in the structure may have been changed\n"}};
 
-const char   LOGS[]     = "StackLogs.txt";
-const int    DUMP_LEVEL = 2;
+const char LOGS[]           = "StackLogs.txt";
+const int  DUMP_LEVEL       = 2;
+
+#define PROTECTION_LEVEL  3 //! if first bit = 1 canary protection on. if second bit = 1 hash protection on
+#define CANARY_PROTECTION 1
+#define HASH_PROTECTION   2
 
 const double FOR_RESIZE  = 1.618; 
-const Elem    POISON      = 2147483647;
+const Elem   POISON      = 2147483647;
 const void*  POISON_PTR  = (void*)13;
 const size_t KENAR       = 0xAAAAAAAAAAAAAAAA;
 const int    OUTPUT_TYPE = 4;   //!This constant is used to print stack elements to logs in right format
@@ -139,9 +143,11 @@ size_t GetHash(void* struct_ptr, size_t size)
         return POISON;
 
     char* ptr = (char*)struct_ptr;
-    size_t hash = 0;
+    size_t hash = 5381;
+
     for(int i = 0; i < size; i++)
-        hash += (size_t)ptr[i];
+        hash = (size_t)(ptr[i] + 5381);
+
     return hash;
 }
 
@@ -163,9 +169,14 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
         return;
     }
     LogPrintf(fp, "Stack[%p] \"%s\" at %s at %s(%d):\n", stk, stk->debug.name, stk->debug.function, stk->debug.file, stk->debug.line);
+    
+    #if (PROTECTION_LEVEL & CANARY_PROTECTION)
+    {
+        LogPrintf(fp, "Left border  = %llu\n", stk->left_border);
+        LogPrintf(fp, "Rigth border = %llu\n", stk->right_border);
+    }
+    #endif
 
-    LogPrintf(fp, "Left border  = %llu\n", stk->left_border);
-    LogPrintf(fp, "Rigth border = %llu\n", stk->right_border);
     LogPrintf(fp, "{\n");
     LogPrintf(fp, "\tsize     = %d\n", stk->size);
     LogPrintf(fp, "\tcapacity = %d\n", stk->capacity);
@@ -174,9 +185,14 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
     LogPrintf(fp, "\t{\n");
 
     if (deep > 1 && stk->data != nullptr && stk->size != POISON && stk->capacity != POISON && stk->size <= stk->capacity && stk->capacity >= 0 && stk->size >= 0)
+    {
+        #if (PROTECTION_LEVEL & CANARY_PROTECTION)
         {
-        LogPrintf(fp, "\t\tLeftCan  = %llu\n", ((size_t*)stk->data)[-1]);
-        LogPrintf(fp, "\t\tRightCan = %llu\n", *(size_t*)((char*)stk->data + sizeof(Elem)*stk->capacity));
+            LogPrintf(fp, "\t\tLeftCan  = %llu\n", ((size_t*)stk->data)[-1]);
+            LogPrintf(fp, "\t\tRightCan = %llu\n", *(size_t*)((char*)stk->data + sizeof(Elem)*stk->capacity));
+        }
+        #endif
+
         int i = 0;
         if (deep > 2 || stk->capacity <= 20)
         {
@@ -242,22 +258,34 @@ size_t StackCheck(Stack* stk)
             error |= NULL_DATA;
         else
         {
-            if (GetHash(stk->data, stk->capacity*sizeof(Elem)) != stk->data_hash)
-                error |= DATA_HASH_MISMATCH;
+            #if (PROTECTION_LEVEL & HASH_PROTECTION)
+            {
+                if (GetHash(stk->data, stk->capacity*sizeof(Elem)) != stk->data_hash)
+                    error |= DATA_HASH_MISMATCH;
+            }
+            #endif
 
-            if (((size_t*)stk->data)[-1] != KENAR)
-                error |= LEFT_BORDER_DAMAGED;
-            if (stk->capacity >= 0 && stk->capacity != POISON - 1 && 
-                *(size_t*)((char*)stk->data + stk->capacity*sizeof(Elem)) != KENAR ^ 1)
-                error |= RIGHT_BORDER_DAMAGED;
+            #if (PROTECTION_LEVEL & CANARY_PROTECTION)
+            {
+                if (((size_t*)stk->data)[-1] != KENAR)
+                    error |= LEFT_BORDER_DAMAGED;
+                if (stk->capacity >= 0 && stk->capacity != POISON - 1 && 
+                    *(size_t*)((char*)stk->data + stk->capacity*sizeof(Elem)) != KENAR ^ 1)
+                    error |= RIGHT_BORDER_DAMAGED;
+            }
+            #endif
         }
         
-        int old_hash = stk->struct_hash;
-        stk->struct_hash = 0;
-        int now_hash = GetHash(stk, sizeof(Stack));
-        stk->struct_hash = old_hash;
-        if (stk->struct_hash != now_hash)
-            error |= STRUCT_HASH_MISMATCH;
+        #if (PROTECTION_LEVEL & HASH_PROTECTION)
+        {
+            int old_hash = stk->struct_hash;
+            stk->struct_hash = 0;
+            int now_hash = GetHash(stk, sizeof(Stack));
+            stk->struct_hash = old_hash;
+            if (stk->struct_hash != now_hash)
+                error |= STRUCT_HASH_MISMATCH;
+        }
+        #endif
     }
     
     FILE* fp = fopen(LOGS, "a");
@@ -288,7 +316,10 @@ size_t StackConstructor(Stack* stk, int capacity, int line, const char function[
     *stk = {};
     stk->capacity = capacity;
 
-    size_t new_capacity = stk->capacity*sizeof(Elem) + sizeof(KENAR)*2;
+    size_t new_capacity = stk->capacity*sizeof(Elem);
+    #if (PROTECTION_LEVEL & CANARY_PROTECTION)
+        new_capacity += sizeof(KENAR)*2;
+    #endif
     char* mem_block = (char*)calloc(new_capacity, 1);
     if (mem_block == nullptr)
     {
@@ -297,11 +328,19 @@ size_t StackConstructor(Stack* stk, int capacity, int line, const char function[
     }
     else
     {
-        *(size_t*)mem_block = KENAR;
-        *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
-        stk->data = (Elem*)(mem_block + sizeof(KENAR));
-        
-        stk->data_hash = GetHash(stk->data, stk->capacity*sizeof(Elem));
+        #if (PROTECTION_LEVEL & CANARY_PROTECTION)
+        {
+            *(size_t*)mem_block = KENAR;
+            *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+            stk->data = (Elem*)(mem_block + sizeof(KENAR));
+        }
+        #else
+            stk->data = (Elem*)(mem_block);
+        #endif
+
+        #if (PROTECTION_LEVEL & HASH_PROTECTION)
+            stk->data_hash = GetHash(stk->data, stk->capacity*sizeof(Elem));
+        #endif
     }
     stk->size = 0;
 
@@ -312,7 +351,9 @@ size_t StackConstructor(Stack* stk, int capacity, int line, const char function[
     stk->debug.line   = line;
     stk->debug.status = true;
 
-    stk->struct_hash = GetHash(stk, sizeof(stk));
+    #if (PROTECTION_LEVEL & CANARY_PROTECTION) 
+        stk->struct_hash = GetHash(stk, sizeof(stk));
+    #endif
 
     OK_ASSERT(stk);
     return error;
@@ -325,7 +366,12 @@ size_t StackDtor(Stack* stk)
     OK_ASSERT(stk);
     stk->capacity    = POISON - 1;
     stk->size        = POISON;
-    free((char*)stk->data - sizeof(KENAR));
+
+    #if (PROTECTION_LEVEL & CANARY_PROTECTION)
+        free((char*)stk->data - sizeof(KENAR));
+    #else
+        free(stk->data);
+    #endif
     stk->data        = (Elem*)POISON_PTR;
 
     stk->data_hash   = 0;
@@ -343,28 +389,59 @@ size_t StackResizeUp(Stack* stk)
     if (stk->capacity == 0)
     {
         stk->capacity = 10;
-        size_t new_capacity = stk->capacity*sizeof(Elem) + sizeof(KENAR)*2;
+
+        size_t new_capacity = stk->capacity*sizeof(Elem);
+        #if (PROTECTION_LEVEL & CANARY_PROTECTION)
+            new_capacity += sizeof(KENAR)*2;
+        #endif
 
         char* mem_block = (char*)calloc(new_capacity, 1);
         if (mem_block == nullptr)
             return MEMORY_ALLOCATION_ERROR;
-
-        *(size_t*)mem_block = KENAR;
-        *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
-        stk->data = (Elem*)(mem_block + sizeof(KENAR));
+        
+        #if (PROTECTION_LEVEL & CANARY_PROTECTION)
+        {
+            *(size_t*)mem_block = KENAR;
+            *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+            stk->data = (Elem*)(mem_block + sizeof(KENAR));
+        }
+        #else
+            stk->data = (Elem*)(mem_block);
+        #endif
 
         OK_ASSERT(stk);
         return NO_ERROR;
     }
 
     stk->capacity = stk->capacity * FOR_RESIZE;
-    size_t new_capacity = stk->capacity*sizeof(Elem) + sizeof(KENAR)*2;
+    size_t new_capacity = stk->capacity*sizeof(Elem);
+    #if (PROTECTION_LEVEL & CANARY_PROTECTION)
+        new_capacity += sizeof(KENAR)*2;
+    #endif
 
-    char* mem_block = (char*)realloc((char*)stk->data - sizeof(KENAR), new_capacity);
-    *(size_t*)mem_block = KENAR;
-    *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
-    stk->data = (Elem*)(mem_block + sizeof(KENAR));
-    
+    char* mem_block = nullptr;
+    #if (PROTECTION_LEVEL & CANARY_PROTECTION)
+    {
+        mem_block = (char*)realloc((char*)stk->data - sizeof(KENAR), new_capacity);
+        if (mem_block == nullptr)
+            return MEMORY_ALLOCATION_ERROR;
+        
+        *(size_t*)mem_block = KENAR;
+        *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+        stk->data = (Elem*)(mem_block + sizeof(KENAR));
+    }
+    #else
+    {
+        mem_block = (char*)realloc((char*)stk->data, new_capacity);
+        if (mem_block == nullptr)
+        {
+            stk->data = nullptr;
+            return MEMORY_ALLOCATION_ERROR;
+        }
+        stk->data = (Elem*)(mem_block);
+    }
+    #endif
+
     if (stk->data == nullptr)
         return MEMORY_ALLOCATION_ERROR;
     
@@ -387,10 +464,14 @@ size_t StackPush(Stack* stk, Elem value)
     }
     stk->data[stk->size++] = value;
 
-    stk->data_hash = GetHash(stk->data, sizeof(Elem)*stk->capacity);
+    #if (PROTECTION_LEVEL & HASH_PROTECTION)
+    {
+        stk->data_hash = GetHash(stk->data, sizeof(Elem)*stk->capacity);
 
-    stk->struct_hash = 0;
-    stk->struct_hash = GetHash(stk, sizeof(Stack));
+        stk->struct_hash = 0;
+        stk->struct_hash = GetHash(stk, sizeof(Stack));
+    }
+    #endif
 
     OK_ASSERT(stk);
     return NO_ERROR;
@@ -407,18 +488,24 @@ size_t StackResizeDown(Stack* stk)
     {
         stk->capacity = stk->capacity / FOR_RESIZE;
 
-        size_t new_capacity = stk->capacity*sizeof(Elem) + sizeof(KENAR)*2;
-        char* mem_block = (char*)realloc((char*)stk->data - sizeof(KENAR), new_capacity);
-        
-        if (mem_block == nullptr)
+        size_t new_capacity = stk->capacity*sizeof(Elem);
+        #if (PROTECTION_LEVEL & CANARY_PROTECTION)
         {
-            stk->data = nullptr;
-            return MEMORY_ALLOCATION_ERROR;
-        }
+            new_capacity += sizeof(KENAR)*2;
+            char* mem_block = (char*)realloc((char*)stk->data - sizeof(KENAR), new_capacity);
+            if (mem_block == nullptr)
+            {
+                stk->data = nullptr;
+                return MEMORY_ALLOCATION_ERROR;
+            }
 
-        *(size_t*)mem_block = KENAR;
-        *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
-        stk->data = (Elem*)(mem_block + sizeof(KENAR));
+            *(size_t*)mem_block = KENAR;
+            *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+            stk->data = (Elem*)(mem_block + sizeof(KENAR));
+        }
+        #else
+            stk->data = (Elem*)realloc(stk->data, new_capacity);
+        #endif
     }
     
     OK_ASSERT(stk);
@@ -450,9 +537,13 @@ Elem StackPop(Stack* stk, size_t *err = nullptr)
         if (now_error != NO_ERROR)
             return POISON;
 
-        stk->data_hash = GetHash(stk->data, stk->capacity*sizeof(Elem));
-        stk->struct_hash = 0;
-        stk->struct_hash = GetHash(stk, sizeof(Stack));
+        #if (PROTECTION_LEVEL & HASH_PROTECTION)
+        {
+            stk->data_hash = GetHash(stk->data, stk->capacity*sizeof(Elem));
+            stk->struct_hash = 0;
+            stk->struct_hash = GetHash(stk, sizeof(Stack));
+        }
+        #endif
         return result;
     }
     else

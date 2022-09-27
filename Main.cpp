@@ -7,6 +7,7 @@ typedef long long Elem;
 
 int main()
 {
+    printf("prot & can =  %d\n", PROTECTION_LEVEL & CANARY_PROTECTION); 
     FILE* fp = fopen(LOGS, "w");
     fclose(fp);
 
