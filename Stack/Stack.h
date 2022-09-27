@@ -38,10 +38,17 @@ const char ERROR_DESCRIPTION[][150] = {{"Pointer to stack = nullptr\n"},
 const char   LOGS[]     = "StackLogs.txt";
 const int    DUMP_LEVEL = 2;
 
-const double FOR_RESIZE = 1.618; 
-const int    POISON     = 2147483647;
-const void*  POISON_PTR = (void*)13;
-const size_t KENAR      = 0xAAAAAAAAAAAAAAAA;
+const double FOR_RESIZE  = 1.618; 
+const Elem    POISON      = 2147483647;
+const void*  POISON_PTR  = (void*)13;
+const size_t KENAR       = 0xAAAAAAAAAAAAAAAA;
+const int    OUTPUT_TYPE = 4;   //!This constant is used to print stack elements to logs in right format
+                                //!0 - int
+                                //!1 - char
+                                //!2 - float
+                                //!3 - double
+                                //!4 - long long
+
 
 size_t LogPrintf(FILE* fp, const char *format, ...)
 {
@@ -61,6 +68,40 @@ size_t LogPrintf(FILE* fp, const char *format, ...)
     va_end(args);
 }
 
+size_t PrintElem(Elem value, FILE *fp = nullptr)
+{
+    char format[5] = "%";
+    switch (OUTPUT_TYPE)
+    {
+        case 0:
+            format[1] = 'd';
+        break;
+        case 1:
+            format[1] = 'c';
+        break;
+        case 2:
+            format[1] = 'f';
+        break;
+        case 3:
+            format[1] = 'l';
+            format[2] = 'g';
+        break;
+        case 4:
+            format[1] = 'l';
+            format[2] = 'l';
+            format[3] = 'u';
+        break;
+    }
+    
+    #ifdef LOGS_TO_CONSOLE
+        printf(format, value);
+    #endif
+    #ifdef LOGS_TO_FILE
+        if (fp == nullptr)
+            return ERROR_LOGS_OPEN;
+        fprintf(fp, format, value);
+    #endif
+}
 
 //!------------------------------
 //!status = true  if stack is ready to be used
@@ -140,10 +181,19 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
         if (deep > 2 || stk->capacity <= 20)
         {
             for(i = 0; i < stk->size; i++)
-                LogPrintf(fp, "\t\t*[%d] = %d\n", i, stk->data[i]);
+            {
+                LogPrintf(fp, "\t\t*[%d] = ", i);
+                PrintElem(stk->data[i], fp);
+                LogPrintf(fp, "\n");
+            }
 
             for(i; i < stk->capacity; i++)
-                LogPrintf(fp, "\t\t[%d] = %d\n", i, stk->data[i]);
+            {
+                LogPrintf(fp, "\t\t[%d] = ", i);
+                PrintElem(stk->data[i], fp);
+                LogPrintf(fp, "\n");
+            }
+
         }
         else
         {
@@ -153,7 +203,9 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
                 LogPrintf(fp, "\t\t");
                 if (stk->size > i)
                     LogPrintf(fp, "*");
-                LogPrintf(fp, "[%d] = %d\n", i, stk->data[i]);
+                LogPrintf(fp, "[%d] = ", i);
+                PrintElem(stk->data[i], fp);
+                LogPrintf(fp, "\n");
             }
             LogPrintf(fp, "\t\t...\n");
             for(int i = stk->capacity - out; i < stk->capacity; i++)
@@ -161,7 +213,9 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
                 LogPrintf(fp, "\t\t");
                 if (stk->size > i)
                     LogPrintf(fp, "*");
-                LogPrintf(fp, "[%d] = %d\n", i, stk->data[i]);
+                LogPrintf(fp, "[%d] = ", i);
+                PrintElem(stk->data[i], fp);
+                LogPrintf(fp, "\n");
             }
         }
     }
@@ -334,10 +388,6 @@ size_t StackPush(Stack* stk, Elem value)
     stk->data[stk->size++] = value;
 
     stk->data_hash = GetHash(stk->data, sizeof(Elem)*stk->capacity);
-
-    FILE* fp = fopen(LOGS, "a");
-    fprintf(fp, "stk.data[%d] = %d\n", stk->size - 1, stk->data[stk->size - 1]);
-    fclose(fp);
 
     stk->struct_hash = 0;
     stk->struct_hash = GetHash(stk, sizeof(Stack));

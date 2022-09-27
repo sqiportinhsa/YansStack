@@ -1,7 +1,8 @@
 #include <stdio.h>
 
-typedef int Elem;
+typedef long long Elem;
 #define LOGS_TO_FILE
+//#define LOGS_TO_CONSOLE
 #include "Stack\Stack.h"
 
 int main()
@@ -19,7 +20,7 @@ int main()
     StackPush(&stk1, 120);
 
     for(int i = 0; i < 20; i++)
-        printf("%d \n", StackPop(&stk1));
+        printf("%llu \n", StackPop(&stk1));
 
     OK_ASSERT(&stk1);
 

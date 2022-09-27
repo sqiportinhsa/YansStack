@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "algorithm": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "type_traits": "cpp",
+        "xtr1common": "cpp"
     }
 }
