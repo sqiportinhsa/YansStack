@@ -33,7 +33,9 @@ const char ERROR_DESCRIPTION[][150] = {{"Pointer to stack = nullptr\n"},
                                        {"Pointer to stack.data = nullptr\n"},
                                        {"Error during open logs file\n"},
                                        {"The left boundary element is damaged. Other data in the structure may have been changed\n"},
-                                       {"The right boundary element is damaged. Other data in the structure may have been changed\n"}};
+                                       {"The right boundary element is damaged. Other data in the structure may have been changed\n"},
+                                       {"Structure of stack was damaged\n"},
+                                       {"Stack elements was damaged\n"}};
 
 const char LOGS[]           = "StackLogs.txt";
 const int  DUMP_LEVEL       = 2;
@@ -146,7 +148,7 @@ size_t GetHash(void* struct_ptr, size_t size)
     size_t hash = 5381;
 
     for(int i = 0; i < size; i++)
-        hash = (size_t)(ptr[i] + 5381);
+        hash = (size_t)(ptr[i] + hash*33);
 
     return hash;
 }
@@ -178,8 +180,10 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
     #endif
 
     LogPrintf(fp, "{\n");
-    LogPrintf(fp, "\tsize     = %d\n", stk->size);
-    LogPrintf(fp, "\tcapacity = %d\n", stk->capacity);
+    LogPrintf(fp, "\tsize        = %d\n", stk->size);
+    LogPrintf(fp, "\tcapacity    = %d\n", stk->capacity);
+    LogPrintf(fp, "\tdata_hash   = %d\n", stk->data_hash);
+    LogPrintf(fp, "\tstruct_hash = %d\n", stk->struct_hash);
 
     LogPrintf(fp, "\tdata[%p]\n", stk->data);
     LogPrintf(fp, "\t{\n");
@@ -260,7 +264,8 @@ size_t StackCheck(Stack* stk)
         {
             #if (PROTECTION_LEVEL & HASH_PROTECTION)
             {
-                if (GetHash(stk->data, stk->capacity*sizeof(Elem)) != stk->data_hash)
+                size_t hash = GetHash(stk->data, stk->capacity*sizeof(Elem));
+                if (hash != stk->data_hash)
                     error |= DATA_HASH_MISMATCH;
             }
             #endif
@@ -289,7 +294,7 @@ size_t StackCheck(Stack* stk)
     }
     
     FILE* fp = fopen(LOGS, "a");
-    LogPrintf(fp, "\nStack = %p\n" "Chech status = %d\n", stk, error);
+    LogPrintf(fp, "Stack = %p\n" "Chech status = %d\n", stk, error);
     if (error != 0)
     {
         for(int i = 0; i < 32; i++)

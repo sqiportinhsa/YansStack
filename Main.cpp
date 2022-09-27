@@ -7,7 +7,6 @@ typedef long long Elem;
 
 int main()
 {
-    printf("prot & can =  %d\n", PROTECTION_LEVEL & CANARY_PROTECTION); 
     FILE* fp = fopen(LOGS, "w");
     fclose(fp);
 
@@ -20,10 +19,16 @@ int main()
     StackPush(&stk1, 120);
     StackPush(&stk1, 120);
 
+    //stk1.data[-1] = 0;
+    //OK_ASSERT(&stk1);
+    //printf("hash = %llu\n", GetHash(stk1.data, stk1.capacity*sizeof(Elem)));
+    //stk1.data[1] = 0;
+    //printf("hash = %llu\n", GetHash(stk1.data, stk1.capacity*sizeof(Elem)));
+    //OK_ASSERT(&stk1);
+
     for(int i = 0; i < 20; i++)
         printf("%llu \n", StackPop(&stk1));
 
-    OK_ASSERT(&stk1);
 
     StackDtor(&stk1);
     DUMP_STACK(&stk1);
