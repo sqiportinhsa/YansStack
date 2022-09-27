@@ -47,7 +47,7 @@ const int  DUMP_LEVEL       = 2;
 const double FOR_RESIZE  = 1.618; 
 const Elem   POISON      = 2147483647;
 const void*  POISON_PTR  = (void*)13;
-const size_t KENAR       = 0xAAAAAAAAAAAAAAAA;
+const size_t KENAR       = 0xDEADDED;
 const int    OUTPUT_TYPE = 4;   //!This constant is used to print stack elements to logs in right format
                                 //!0 - int
                                 //!1 - char
@@ -145,8 +145,8 @@ size_t GetHash(void* struct_ptr, size_t size)
         return POISON;
 
     char* ptr = (char*)struct_ptr;
-    size_t hash = 5381;
 
+    size_t hash = 5381;
     for(int i = 0; i < size; i++)
         hash = (size_t)(ptr[i] + hash*33);
 
@@ -336,7 +336,7 @@ size_t StackConstructor(Stack* stk, int capacity, int line, const char function[
         #if (PROTECTION_LEVEL & CANARY_PROTECTION)
         {
             *(size_t*)mem_block = KENAR;
-            *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+            *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = (size_t)(-1)^KENAR;
             stk->data = (Elem*)(mem_block + sizeof(KENAR));
         }
         #else
@@ -407,7 +407,7 @@ size_t StackResizeUp(Stack* stk)
         #if (PROTECTION_LEVEL & CANARY_PROTECTION)
         {
             *(size_t*)mem_block = KENAR;
-            *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+            *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = (size_t)(-1)^KENAR;
             stk->data = (Elem*)(mem_block + sizeof(KENAR));
         }
         #else
@@ -432,7 +432,7 @@ size_t StackResizeUp(Stack* stk)
             return MEMORY_ALLOCATION_ERROR;
         
         *(size_t*)mem_block = KENAR;
-        *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+        *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = (size_t)(-1)^KENAR;
         stk->data = (Elem*)(mem_block + sizeof(KENAR));
     }
     #else
@@ -505,7 +505,7 @@ size_t StackResizeDown(Stack* stk)
             }
 
             *(size_t*)mem_block = KENAR;
-            *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = KENAR^1;
+            *(size_t*)(mem_block + stk->capacity*sizeof(Elem) + sizeof(KENAR)) = (size_t)(-1)^KENAR;
             stk->data = (Elem*)(mem_block + sizeof(KENAR));
         }
         #else
