@@ -1,5 +1,10 @@
 #include <stdio.h>
 
+struct stc
+{
+    long long a[100] = {};
+};
+
 typedef int Elem;
 #define LOGS_TO_FILE
 //#define LOGS_TO_CONSOLE
@@ -13,22 +18,8 @@ int main()
     Stack stk1 = {};
     StackCtor(&stk1, 10);
 
-    for(int i = 0; i < 10; i++)
-        StackPush(&stk1, i);
-
     StackPush(&stk1, 120);
     StackPush(&stk1, 120);
-
-    stk1.data[-1] = 0;
-    OK_ASSERT(stk1);
-    printf("hash = %llu\n", GetHash(stk1.data, stk1.capacity*sizeof(Elem)));
-    stk1.data[0] = 100;
-    printf("hash = %llu\n", GetHash(stk1.data, stk1.capacity*sizeof(Elem)));
-    OK_ASSERT(stk1);
-
-    for(int i = 0; i < 20; i++)
-        printf("%d: %d \n", stk1.size,StackPop(&stk1));
-
 
     StackDtor(&stk1);
     DUMP_STACK(stk1);

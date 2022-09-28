@@ -38,7 +38,7 @@ const char ERROR_DESCRIPTION[][150] = {{"Pointer to stack = nullptr\n"},
                                        {"Stack elements was damaged\n"}};
 
 const char LOGS[]           = "StackLogs.txt";
-const int  DUMP_LEVEL       = 2;
+const int  DUMP_LEVEL       = 1;
 
 #define PROTECTION_LEVEL  3 //! if first bit = 1 canary protection on. if second bit = 1 hash protection on
 #define CANARY_PROTECTION 1
@@ -48,7 +48,7 @@ const double FOR_RESIZE  = 1.618;
 const Elem   POISON      = 2147483647;
 const void*  POISON_PTR  = (void*)13;
 const size_t KENAR       = 0xAAAAAAAAADEADDED;
-const int    OUTPUT_TYPE = 4;   //!This constant is used to print stack elements to logs in right format
+const int    OUTPUT_TYPE = 0;   //!This constant is used to print stack elements to logs in right format
                                 //!0 - int
                                 //!1 - char
                                 //!2 - float
@@ -148,7 +148,7 @@ size_t GetHash(void* struct_ptr, size_t size)
 
     size_t hash = 5381;
     for(int i = 0; i < size; i++)
-        hash = (size_t)(ptr[i] + hash*33);
+        hash = (size_t)(ptr[0] + hash*33);
 
     return hash;
 }
@@ -401,12 +401,7 @@ size_t StackResizeUp(Stack* stk)
         #endif
 
         char* mem_block = (char*)calloc(new_capacity, 1);
-        if (mem_block == nullptr)
-        {
-            OK_ASSERT(*stk);
-            return MEMORY_ALLOCATION_ERROR;
-        }
-        
+
         #if (PROTECTION_LEVEL & CANARY_PROTECTION)
         {
             *(size_t*)mem_block = KENAR;
@@ -416,6 +411,12 @@ size_t StackResizeUp(Stack* stk)
         #else
             stk->data = (Elem*)(mem_block);
         #endif
+
+        if (stk->data == nullptr)
+        {
+            OK_ASSERT(*stk);
+            return MEMORY_ALLOCATION_ERROR;
+        }
 
         OK_ASSERT(*stk);
         return NO_ERROR;
