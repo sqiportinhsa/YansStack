@@ -47,7 +47,7 @@ const int  DUMP_LEVEL       = 2;
 const double FOR_RESIZE  = 1.618; 
 const Elem   POISON      = 2147483647;
 const void*  POISON_PTR  = (void*)13;
-const size_t KENAR       = 0xDEADDED;
+const size_t KENAR       = 0xAAAAAAAAADEADDED;
 const int    OUTPUT_TYPE = 4;   //!This constant is used to print stack elements to logs in right format
                                 //!0 - int
                                 //!1 - char
@@ -182,8 +182,8 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
     LogPrintf(fp, "{\n");
     LogPrintf(fp, "\tsize        = %d\n", stk->size);
     LogPrintf(fp, "\tcapacity    = %d\n", stk->capacity);
-    LogPrintf(fp, "\tdata_hash   = %d\n", stk->data_hash);
-    LogPrintf(fp, "\tstruct_hash = %d\n", stk->struct_hash);
+    LogPrintf(fp, "\tdata_hash   = %llu\n", stk->data_hash);
+    LogPrintf(fp, "\tstruct_hash = %llu\n", stk->struct_hash);
 
     LogPrintf(fp, "\tdata[%p]\n", stk->data);
     LogPrintf(fp, "\t{\n");
@@ -307,16 +307,16 @@ size_t StackCheck(Stack* stk)
     return error;
 }
 
-#define DUMP_STACK(stk) DumpStack(stk, DUMP_LEVEL, __PRETTY_FUNCTION__, __FILE__, __LINE__)
+#define DUMP_STACK(stk) DumpStack(&stk, DUMP_LEVEL, __PRETTY_FUNCTION__, __FILE__, __LINE__)
 
 #define OK_ASSERT(stk) {             \
-    StackCheck(stk);                  \
+    StackCheck(&stk);                  \
     DUMP_STACK(stk);                   \
 }
 
 size_t StackConstructor(Stack* stk, int capacity, int line, const char function[], const char file[], const char name[]) 
 {
-    OK_ASSERT(stk);
+    OK_ASSERT(*stk);
     size_t error = 0;
     *stk = {};
     stk->capacity = capacity;
@@ -360,7 +360,7 @@ size_t StackConstructor(Stack* stk, int capacity, int line, const char function[
         stk->struct_hash = GetHash(stk, sizeof(stk));
     #endif
 
-    OK_ASSERT(stk);
+    OK_ASSERT(*stk);
     return error;
 }
 
@@ -368,7 +368,7 @@ size_t StackConstructor(Stack* stk, int capacity, int line, const char function[
 
 size_t StackDtor(Stack* stk)
 {
-    OK_ASSERT(stk);
+    OK_ASSERT(*stk);
     stk->capacity    = POISON - 1;
     stk->size        = POISON;
 
@@ -389,7 +389,7 @@ size_t StackDtor(Stack* stk)
 
 size_t StackResizeUp(Stack* stk)
 {
-    OK_ASSERT(stk);
+    OK_ASSERT(*stk);
 
     if (stk->capacity == 0)
     {
@@ -402,7 +402,10 @@ size_t StackResizeUp(Stack* stk)
 
         char* mem_block = (char*)calloc(new_capacity, 1);
         if (mem_block == nullptr)
+        {
+            OK_ASSERT(*stk);
             return MEMORY_ALLOCATION_ERROR;
+        }
         
         #if (PROTECTION_LEVEL & CANARY_PROTECTION)
         {
@@ -414,7 +417,7 @@ size_t StackResizeUp(Stack* stk)
             stk->data = (Elem*)(mem_block);
         #endif
 
-        OK_ASSERT(stk);
+        OK_ASSERT(*stk);
         return NO_ERROR;
     }
 
@@ -450,20 +453,20 @@ size_t StackResizeUp(Stack* stk)
     if (stk->data == nullptr)
         return MEMORY_ALLOCATION_ERROR;
     
-    OK_ASSERT(stk);
+    OK_ASSERT(*stk);
     return NO_ERROR;
 }
 
 size_t StackPush(Stack* stk, Elem value)
 {
-    OK_ASSERT(stk);
+    OK_ASSERT(*stk);
 
     if (stk->capacity == stk->size)
     {
         size_t error = 0;
         if ((error = StackResizeUp(stk)))
         {   
-            OK_ASSERT(stk);
+            OK_ASSERT(*stk);
             return error;
         }
     }
@@ -478,13 +481,13 @@ size_t StackPush(Stack* stk, Elem value)
     }
     #endif
 
-    OK_ASSERT(stk);
+    OK_ASSERT(*stk);
     return NO_ERROR;
 }
 
 size_t StackResizeDown(Stack* stk)
 {
-    OK_ASSERT(stk);
+    OK_ASSERT(*stk);
 
     if (stk->capacity == 0)
         return NO_ERROR;
@@ -513,7 +516,7 @@ size_t StackResizeDown(Stack* stk)
         #endif
     }
     
-    OK_ASSERT(stk);
+    OK_ASSERT(*stk);
     if (stk->data == nullptr)
         return MEMORY_ALLOCATION_ERROR;
     return NO_ERROR;
@@ -521,7 +524,7 @@ size_t StackResizeDown(Stack* stk)
 
 Elem StackPop(Stack* stk, size_t *err = nullptr)
 {
-    OK_ASSERT(stk);
+    OK_ASSERT(*stk);
 
     if (stk->size > 0)
         stk->size--;
@@ -540,7 +543,10 @@ Elem StackPop(Stack* stk, size_t *err = nullptr)
         if (err != nullptr)
             *err = now_error;
         if (now_error != NO_ERROR)
+        {
+            OK_ASSERT(*stk);
             return POISON;
+        }
 
         #if (PROTECTION_LEVEL & HASH_PROTECTION)
         {
