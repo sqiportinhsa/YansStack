@@ -12,15 +12,19 @@ typedef int Elem;
 
 int main()
 {
-    FILE* fp = fopen(LOGS, "w");
-    fclose(fp);
-
-    Stack stk1 = {};
-    StackCtor(&stk1, 10);
-
-    StackPush(&stk1, 120);
-    StackPush(&stk1, 120);
-
-    StackDtor(&stk1);
-    DUMP_STACK(stk1);
+    Stack stk = {};
+    int err = 0;
+    err += StackCtor(&stk, 8);
+    for (int i = 0; i < 10; ++i) {
+        StackPush(&stk, i);
+    }
+    stk.data[3] = 14;
+    stk.left_border = 14;
+    DUMP_STACK(stk);
+    for (int i = 9; i >= 0; --i) {
+        printf("popped: %d", StackPop(&stk));
+    }
+    err += StackDtor(&stk);
+    DUMP_STACK(stk);
+    return 0;
 }

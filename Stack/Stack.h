@@ -38,7 +38,7 @@ const char ERROR_DESCRIPTION[][150] = {{"Pointer to stack = nullptr\n"},
                                        {"Stack elements was damaged\n"}};
 
 const char LOGS[]           = "StackLogs.txt";
-const int  DUMP_LEVEL       = 1;
+const int  DUMP_LEVEL       = 10;
 
 #define PROTECTION_LEVEL  3 //! if first bit = 1 canary protection on. if second bit = 1 hash protection on
 #define CANARY_PROTECTION 1
@@ -200,14 +200,14 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
         int i = 0;
         if (deep > 2 || stk->capacity <= 20)
         {
-            for(i = 0; i < stk->size; i++)
+            for(; i < stk->size; i++)
             {
                 LogPrintf(fp, "\t\t*[%d] = ", i);
                 PrintElem(stk->data[i], fp);
                 LogPrintf(fp, "\n");
             }
 
-            for(i; i < stk->capacity; i++)
+            for(; i < stk->capacity; i++)
             {
                 LogPrintf(fp, "\t\t[%d] = ", i);
                 PrintElem(stk->data[i], fp);
@@ -218,7 +218,7 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
         else
         {
             int out = 10;
-            for(int i = 0; i < out; i++)
+            for(; i < out; i++)
             {
                 LogPrintf(fp, "\t\t");
                 if (stk->size > i)
@@ -228,7 +228,7 @@ void DumpStack(Stack *stk, int deep, const char function[], const char file[], i
                 LogPrintf(fp, "\n");
             }
             LogPrintf(fp, "\t\t...\n");
-            for(int i = stk->capacity - out; i < stk->capacity; i++)
+            for(i = stk->capacity - out; i < stk->capacity; i++)
             {
                 LogPrintf(fp, "\t\t");
                 if (stk->size > i)
@@ -309,7 +309,7 @@ size_t StackCheck(Stack* stk)
 
 #define DUMP_STACK(stk) DumpStack(&stk, DUMP_LEVEL, __PRETTY_FUNCTION__, __FILE__, __LINE__)
 
-#define OK_ASSERT(stk) {             \
+#define OK_ASSERT(stk) {               \
     StackCheck(&stk);                  \
     DUMP_STACK(stk);                   \
 }

@@ -74,7 +74,7 @@ int strnlen_(char *str, size_t maxLen)
 {
     assert(str != nullptr);
     
-    int n = 0;
+    size_t n = 0;
     while (str[n] != '\0' && n < maxLen)
         n++;
 
@@ -107,7 +107,7 @@ char *strncat_(char *to, char *from, size_t n)
 
     int len_to = strlen_(to);
 
-    int index = 0;
+    size_t index = 0;
     while (from[index] != '\0' && index < n)
     {
         to[len_to + index] = from[index];
@@ -122,7 +122,7 @@ char *strnchr_(char *str, char c, size_t maxLen)
 {
     assert(str != nullptr);
     
-    int i = 0;
+    size_t i = 0;
     char* answer;
     while (i < maxLen && str[i] != '\0')
     {
@@ -250,7 +250,7 @@ char  strncmp_(const char * s1, const char* s2, size_t n)
     assert(s1 != nullptr);
     assert(s2 != nullptr);
 
-    int index = 0;
+    size_t index = 0;
 
     while (s1[index] && s2[index] && index < n - 1)
     {
@@ -291,11 +291,11 @@ int getline_(char *line, size_t max, FILE* fp)
     assert(line != nullptr);
     assert(fp   != nullptr);
 
-    int n = 0;
+    size_t n = 0;
     int c = 0;
     while ((c = getc(fp)) != '\n' && c != EOF  && n < max)
     {
-        line[n] = c;
+        line[n] = (char) c;
         n++;
     }
     
@@ -311,26 +311,26 @@ int getline_(char *line, size_t max, FILE* fp)
 //!-------------------------
 bool is_russian_letter_vowel(char c)
 {
-    return (c == 'à' ||
-            c == 'å' ||
-            c == '¸' ||
-            c == 'è' ||
-            c == 'î' ||
-            c == 'ó' ||
-            c == 'û' ||
-            c == 'ý' ||
-            c == 'þ' ||
-            c == 'ÿ' ||
-            c == 'À' ||
-            c == 'Å' ||
-            c == '¨' ||
-            c == 'È' ||
-            c == 'Î' ||
-            c == 'Ó' ||
-            c == 'Û' ||
-            c == 'Ý' ||
-            c == 'Þ' ||
-            c == 'ß');
+    return (c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½' ||
+            c == 'ï¿½');
 }
 
 //!------------------------

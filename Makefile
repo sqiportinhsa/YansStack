@@ -4,7 +4,7 @@ CPPFLAGS = -Wshadow -Winit-self -Wredundant-decls -Wcast-align -Wundef -Wfloat-e
 .PHONY: all
 all: $(TARGET)
 
-$(TARGET): main.o Strings\_Strings.o Stack.h
+$(TARGET): main.o Strings\_Strings.o Stack\Stack.h
 	g++ main.o Strings\_Strings.o  -o $(TARGET) $(CPPFLAGS)
 
 bin\main.o: main.cpp
